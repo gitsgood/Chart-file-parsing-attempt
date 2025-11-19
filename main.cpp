@@ -6,74 +6,88 @@
 
 int main()
 {
-	std::string filePathToChart{ "./notes.chart" };
+	std::string FileContentStr{ "" };
+	// Most variable here do not need to live for the duration of the whole program. We can release them from the stack sooner by tightening their scope.
+	// Some of these variables can get relatively sizeable, so it's probably the one time where this practice has obvious advantages.
+	{
+		std::string filePathToChart{ "./notes.chart" };
 
-	std::stringstream FileContent{ "" };
+		std::stringstream FileContent{ "" };
 
-	std::ifstream theFileItself(filePathToChart);
+		std::ifstream theFileItself(filePathToChart);
 
-	FileContent << theFileItself.rdbuf();
+		FileContent << theFileItself.rdbuf();
 
-	theFileItself.close();
+		theFileItself.close();
 
-	std::string FileContentStr = FileContent.str();
+		FileContentStr = FileContent.str();
+	}
 
-	auto getNumberFromFile = [FileContentStr](const std::string& stringPrecedingValue, int valueDigitCount) -> int
+	auto regexCapture = [&FileContentStr](const std::regex& regexPattern) -> std::string
 		{
-			size_t StringPosition{ FileContentStr.find(stringPrecedingValue) };
-
-			std::string SearchedForNumberString = FileContentStr.substr(StringPosition + stringPrecedingValue.size(), valueDigitCount);
-			std::cout << SearchedForNumberString << std::endl;
-
-			try
+			// Regex is pretty cool. You make spells, and they WILL find the target string or sequence. Litteral string voodoo is what this is.
+			std::smatch MatchedPattern;
+			if (std::regex_search(FileContentStr, MatchedPattern, regexPattern))
 			{
-				int SearchedForNumber{ stoi(SearchedForNumberString) };
-				std::cout << SearchedForNumber << std::endl;
-				return SearchedForNumber;
+				// We extract the first capture by giving it the 1 index (if we gave it 0, it would fill the string with every possible match, probably makes no difference in this case).
+				return MatchedPattern[1].str();
 			}
-			// Catch if the string isn't a valid number
-			catch (const std::invalid_argument& e) {
-				std::cerr << "Invalid argument: The string is not a number. Error: " << e.what() << std::endl;
-			}
-			// Catch if the number is too big or small for an int
-			catch (const std::out_of_range& e) {
-				std::cerr << "Out of range: The number is too large or small. Error: " << e.what() << std::endl;
+			else
+			{
+				std::cerr << "Failed to find pattern.\n";
 			}
 		};
 
-	getNumberFromFile("Resolution \= ", 3);
+	auto stoiWithCatches = [](const std::string& stringToTurnIntoInteger) -> int
+		{
+			try
+			{
+				return stoi(stringToTurnIntoInteger);
+			}
+			// stoi throws errors, and if we don't catch them, program will act even weirder. Not like c++ would just let us know about this ofc, but it exists anyways...
+			// So anyways, this error is for strings that are not numbers.
+			catch (const std::invalid_argument& e)
+			{
+				std::cerr << "Error : " << e.what() << std::endl;
+			}
+			// This one is for numbers above or below the limits of an integer, probably if not in this interval -> [2^-31, 2^31-1]
+			catch (const std::out_of_range& e)
+			{
+				std::cerr << "Error : " << e.what() << std::endl;
+			}
+		};
 
-	getNumberFromFile("\[SyncTrack\]\n\{\n  0 \= TS ", 1);
-
-	std::stringstream InputForBeatsPerMinuteCall;
-	InputForBeatsPerMinuteCall << "\[SyncTrack\]\n\{\n  0 \= TS " << getNumberFromFile("\[SyncTrack\]\n\{\n  0 \= TS ", 1) << "\n  0 \= B ";
-
-	getNumberFromFile(InputForBeatsPerMinuteCall.str(), 6);
-
-	std::regex BlockPattern("\\[ExpertSingle\\]\\n\\{\\n([\\s\\S]*?)\n\\}");
-	std::smatch BlockMatch;
-	std::string NoteContent;
-
-	if (std::regex_search(FileContentStr, BlockMatch, BlockPattern))
+	int Resolution{ 0 };
 	{
-		NoteContent = BlockMatch[1].str();
+		std::regex ResolutionPattern{ "Resolution \= (\\d{1,4})" };
+		Resolution = stoiWithCatches(regexCapture(ResolutionPattern));
 	}
+	std::cout << Resolution << std::endl;
 
-	//std::cout << NoteContent << std::endl;
+	int TimeSignature{ 0 };
+	{
+		std::regex TimeSignaturePattern{ "\\[SyncTrack\\]\n\\{\n  \\d{1,5} \= TS (\\d{1,9})" };
+		TimeSignature = stoiWithCatches(regexCapture(TimeSignaturePattern));
+	}
+	std::cout << TimeSignature << std::endl;
+
+	int BeatsPerMinute{ 0 };
+	{
+		std::regex BeatsPerMinutePattern{ "\\[SyncTrack\\]\n\\{\n  \\d{1,5} \= TS \\d{1,9}\n  0 \= B (\\d{1,9})" };
+		BeatsPerMinute = stoiWithCatches(regexCapture(BeatsPerMinutePattern));
+	}
+	std::cout << BeatsPerMinute << std::endl;
+
+	std::string NoteContent{ "" };
+	{ 
+		std::regex NoteContentPattern{ "\\[ExpertSingle\\]\\n\\{\\n([\\s\\S]*?)\n\\}" };
+		NoteContent = regexCapture(NoteContentPattern);
+	}
+	// std::cout << NoteContent << std::endl;
 
 	std::regex linePattern("^\\s*\\d{3,6}\\s*=\\s*N (\\d{1,5}).*$");
 	for (auto it = std::sregex_iterator(NoteContent.begin(), NoteContent.end(), linePattern); it != std::sregex_iterator(); ++it)
 	{
-		std::cout << "The Note we want for this event is the number: "
-			<< (*it)[1].str() << std::endl;
+		std::cout << (*it)[1].str() << std::endl;
 	}
-
-	//std::string RegexTest{ "^\\s*\\d{3,6}\\s*=\\s*N (\\d{1,5}).*$" };
-
-	////std::cout<<RegexTest.find("*{3,6}");
-
-	//std::regex Pattern{ "\\[ExpertSingle\\]\n\\{\n\\*[^\}]\\*\\d{3,6}" };
-
-	//std::cout << std::endl << std::regex_search(RegexTest, Pattern);
-
 }
