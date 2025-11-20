@@ -8,7 +8,7 @@ int main()
 {
 	std::string FileContentStr{ "" };
 	// Most variable here do not need to live for the duration of the whole program. We can release them from the stack sooner by tightening their scope.
-	// Some of these variables can get relatively sizeable, so it's probably the one time where this practice has obvious advantages.
+	// Some of these variables can get relatively sizeable, so it's probably good to not keep them around longer than needed.
 	{
 		std::string filePathToChart{ "./notes.chart" };
 
